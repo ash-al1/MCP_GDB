@@ -74,6 +74,7 @@ impl fmt::Display for RegisterFormat {
 pub enum BreakPointLocation<'a> {
     Address(usize),
     Function(&'a Path, &'a str),
+    FunctionAny(&'a str),
     Line(&'a Path, usize),
 }
 
@@ -242,6 +243,9 @@ impl MiCommand {
                     //    OsString::from("--function"),
                     //    OsString::from(func_name),
                     //]
+                }
+                BreakPointLocation::FunctionAny(func_name) => {
+                    Some(vec![OsString::from(func_name)])
                 }
                 BreakPointLocation::Line(path, line_number) => {
                     let mut ret = OsString::from(path);

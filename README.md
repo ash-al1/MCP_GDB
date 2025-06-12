@@ -58,7 +58,8 @@ You can adjust server configuration by modifying the `src/config.rs` file or by 
 ### Breakpoint Management
 
 - `get_breakpoints` - Get breakpoint list
-- `set_breakpoint` - Set breakpoint
+- `set_breakpoint` - Set breakpoint (line)
+- `set_function_breakpoint` - Set breakpoint (function)
 - `delete_breakpoint` - Delete breakpoint
 
 ### Debug Information

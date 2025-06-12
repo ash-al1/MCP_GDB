@@ -613,6 +613,7 @@ fn register_tools(builder: ServerProtocolBuilder) -> ServerProtocolBuilder {
         .register_tool(tools::StopDebuggingTool::tool(), tools::StopDebuggingTool::call())
         .register_tool(tools::GetBreakpointsTool::tool(), tools::GetBreakpointsTool::call())
         .register_tool(tools::SetBreakpointTool::tool(), tools::SetBreakpointTool::call())
+        .register_tool(tools::SetFunctionBreakpointTool::tool(), tools::SetFunctionBreakpointTool::call())
         .register_tool(tools::DeleteBreakpointTool::tool(), tools::DeleteBreakpointTool::call())
         .register_tool(tools::GetStackFramesTool::tool(), tools::GetStackFramesTool::call())
         .register_tool(tools::GetLocalVariablesTool::tool(), tools::GetLocalVariablesTool::call())
@@ -622,4 +623,5 @@ fn register_tools(builder: ServerProtocolBuilder) -> ServerProtocolBuilder {
         .register_tool(tools::GetRegistersTool::tool(), tools::GetRegistersTool::call())
         .register_tool(tools::GetRegisterNamesTool::tool(), tools::GetRegisterNamesTool::call())
         .register_tool(tools::ReadMemoryTool::tool(), tools::ReadMemoryTool::call())
+        .register_tool(tools::DebugSessionStateTool::tool(), tools::DebugSessionStateTool::call())
 }

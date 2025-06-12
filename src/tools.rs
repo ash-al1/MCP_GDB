@@ -17,6 +17,7 @@ pub fn init_gdb_manager() {
     LazyLock::force(&GDB_MANAGER);
 }
 
+
 #[tool(
     name = "create_session",
     description = "Create a new GDB debugging session with optional parameters,\
@@ -129,6 +130,32 @@ pub async fn stop_debugging_tool(session_id: String) -> Result<ToolResponseConte
 pub async fn get_breakpoints_tool(session_id: String) -> Result<ToolResponseContent> {
     let breakpoints = GDB_MANAGER.get_breakpoints(&session_id).await?;
     Ok(tool_text_content!(format!("Breakpoints: {}", serde_json::to_string(&breakpoints)?)))
+}
+
+#[tool(
+    name = "set_function_breakpoint",
+    description = "Set a breakpoint on functions",
+    params(
+        session_id    = "The ID of the GDB session",
+        function_name = "Name of the function"
+    )
+)]
+pub async fn set_function_breakpoint_tool(
+    session_id: String,
+    function_name: String,
+) -> Result<ToolResponseContent> {
+    let breakpoint = GDB_MANAGER.set_function_breakpoint(&session_id, &function_name).await?;
+    Ok(tool_text_content!(format!("Set function breakpoint: {}", serde_json::to_string(&breakpoint)?)))
+}
+
+#[tool(
+    name = "debug_session_state",
+    description = "Debug tool to see current session state and loaded program",
+    params(session_id = "The ID of the GDB session")
+)]
+pub async fn debug_session_state_tool(session_id: String) -> Result<ToolResponseContent> {
+    let state = GDB_MANAGER.debug_session_state(&session_id).await?;
+    Ok(tool_text_content!(format!("Session state: {}", state)))
 }
 
 #[tool(

@@ -18,6 +18,7 @@ use crate::models::{
     BreakPoint, GDBSession, GDBSessionStatus, Memory, Register, StackFrame, Variable,
 };
 
+
 /// GDB Session Manager
 #[derive(Default)]
 pub struct GDBManager {
@@ -38,6 +39,49 @@ struct GDBSessionHandle {
 }
 
 impl GDBManager {
+
+   /// Debug session state  
+    pub async fn debug_session_state(&self, session_id: &str) -> AppResult<String> {
+        // Check if session exists and clone the info we need
+        let session_info = {
+            let sessions = self.sessions.lock().await;
+            let handle = sessions
+                .get(session_id)
+                .ok_or_else(|| AppError::NotFound(format!("Session {} does not exist", session_id)))?;
+            
+            // Clone the session info so we can use it after dropping the lock
+            handle.info.clone()
+        }; // sessions lock is automatically dropped here
+        
+        let mut debug_info = Vec::new();
+        debug_info.push(format!("Session ID: {}", session_id));
+        debug_info.push(format!("Session status: {:?}", session_info.status));
+        debug_info.push(format!("Created at: {}", session_info.created_at));
+        
+        // Try to get current working directory
+        let pwd_response = self.send_command_with_timeout(session_id, &MiCommand::environment_pwd()).await;
+        match pwd_response {
+            Ok(resp) => debug_info.push(format!("Working directory: {:?}", resp.results)),
+            Err(e) => debug_info.push(format!("Failed to get working directory: {}", e)),
+        }
+        
+        // Try to get thread info (shows if program is loaded)
+        let thread_response = self.send_command_with_timeout(session_id, &MiCommand::thread_info(None)).await;
+        match thread_response {
+            Ok(resp) => debug_info.push(format!("Thread info: {}", serde_json::to_string_pretty(&resp.results).unwrap_or_else(|_| "Failed to serialize".to_string()))),
+            Err(e) => debug_info.push(format!("Failed to get thread info: {}", e)),
+        }
+        
+        // Try a simple CLI command to see what's loaded
+        let info_response = self.send_command_with_timeout(session_id, &MiCommand::cli_exec("info files")).await;
+        match info_response {
+            Ok(resp) => debug_info.push(format!("Loaded files: {}", serde_json::to_string_pretty(&resp.results).unwrap_or_else(|_| "Failed to serialize".to_string()))),
+            Err(e) => debug_info.push(format!("Failed to get file info: {}", e)),
+        }
+        
+        Ok(debug_info.join("\n"))
+    } 
+
     /// Create a new GDB session
     pub async fn create_session(
         &self,
@@ -242,6 +286,66 @@ impl GDBManager {
             .ok_or(AppError::NotFound("BreakpointTable not found".to_string()))?;
         let body = table.get("body").ok_or(AppError::NotFound("body not found".to_string()))?;
         Ok(serde_json::from_value(body.to_owned())?)
+    }
+
+
+	/// Set breakpoint on function
+    pub async fn set_function_breakpoint(
+        &self,
+        session_id: &str,
+        function_name: &str,
+    ) -> AppResult<BreakPoint> {
+        debug!("Setting function breakpoint on: {}", function_name);
+        
+        let command = MiCommand::insert_breakpoint(BreakPointLocation::FunctionAny(function_name));
+        let response = self.send_command_with_timeout(session_id, &command).await?;
+
+        // LOG EVERYTHING about the response
+        debug!("=== FUNCTION BREAKPOINT DEBUG ===");
+        debug!("Command: break-insert {}", function_name);
+        debug!("Response class: {:?}", response.class);
+        debug!("Response token: {:?}", response.token);
+        debug!("Full response results: {}", serde_json::to_string_pretty(&response.results).unwrap_or_else(|_| "Failed to serialize".to_string()));
+        debug!("=== END DEBUG ===");
+
+        match response.class {
+            ResultClass::Done => {
+                if let Some(bkpt) = response.results.get("bkpt") {
+                    debug!("Found bkpt field: {}", serde_json::to_string_pretty(bkpt).unwrap_or_else(|_| "Failed to serialize bkpt".to_string()));
+                    Ok(serde_json::from_value(bkpt.to_owned())?)
+                } else {
+                    // Show ALL available fields
+                    let available_fields: Vec<String> = response.results.as_object()
+                        .map(|obj| obj.keys().cloned().collect())
+                        .unwrap_or_default();
+                    
+                    Err(AppError::GDBError(format!(
+                        "Function breakpoint command succeeded but no 'bkpt' field found.\nAvailable fields: {:?}\nFull response: {}", 
+                        available_fields,
+                        serde_json::to_string_pretty(&response.results).unwrap_or_else(|_| "Failed to serialize".to_string())
+                    )))
+                }
+            }
+            ResultClass::Error => {
+                let error_msg = response.results.get("msg")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown error");
+                Err(AppError::GDBError(format!(
+                    "GDB failed to set function breakpoint on '{}': {}\nFull error response: {}", 
+                    function_name, 
+                    error_msg,
+                    serde_json::to_string_pretty(&response.results).unwrap_or_else(|_| "Failed to serialize".to_string())
+                )))
+            }
+            other => {
+                Err(AppError::GDBError(format!(
+                    "Unexpected GDB response class: {:?}\nFunction: {}\nFull response: {}", 
+                    other,
+                    function_name,
+                    serde_json::to_string_pretty(&response.results).unwrap_or_else(|_| "Failed to serialize".to_string())
+                )))
+            }
+        }
     }
 
     /// Set breakpoint
